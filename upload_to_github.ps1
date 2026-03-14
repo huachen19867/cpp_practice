@@ -186,6 +186,42 @@ function Ensure-MainBranch {
     }
 }
 
+function Get-DefaultCommitMessage {
+    $dateText = Get-Date -Format "yyyy-MM-dd"
+    $changedFiles = @()
+
+    $statusLines = Get-GitOutput -Arguments @("-C", $script:RepoRoot, "status", "--short")
+    if ($statusLines) {
+        $changedFiles = $statusLines -split "`r?`n" |
+            ForEach-Object {
+                if ($_ -match '^\s*\S+\s+(.+)$') {
+                    $matches[1].Trim()
+                }
+            } |
+            Where-Object { $_ } |
+            ForEach-Object { $_ -replace '^"|"$', '' }
+    }
+
+    $practiceFiles = $changedFiles |
+        Where-Object { $_ -match '\.(cpp|cc|cxx|h|hpp)$' } |
+        ForEach-Object { Split-Path $_ -Leaf } |
+        Select-Object -Unique
+
+    if ($practiceFiles.Count -eq 1) {
+        return "每日练习 $dateText：更新 $($practiceFiles[0])"
+    }
+
+    if ($practiceFiles.Count -ge 2 -and $practiceFiles.Count -le 3) {
+        return "每日练习 $dateText：更新 $($practiceFiles -join '、')"
+    }
+
+    if ($practiceFiles.Count -gt 3) {
+        return "每日练习 $dateText：更新 $($practiceFiles.Count) 个代码文件"
+    }
+
+    return "每日练习 $dateText：同步脚本与代码"
+}
+
 Set-ConsoleUtf8
 $script:RepoRoot = Split-Path -Parent $PSCommandPath
 $script:GitExe = Find-Git
@@ -213,7 +249,7 @@ if (-not $status) {
 }
 
 if (-not $Message) {
-    $Message = "练习代码更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+    $Message = Get-DefaultCommitMessage
 }
 
 Invoke-Git -Arguments @("-C", $script:RepoRoot, "commit", "-m", $Message)
